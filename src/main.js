@@ -1,14 +1,34 @@
 import readline from "readline";
 import { Chess } from "chess.js";
 import { evaluateBoard } from "./evaluate.js";
-import { mvv_lva, PIECE_NUM } from "./evaluations.js";
+import { mvv_lva, PIECE, PIECE_NUM } from "./evaluations.js";
 
 let chessObj, bestMove, ply = 0, side;
 
-// MVV-LVA heuristic
+const killerMove = (new Array(2)).fill(new Array(64).fill(null));
+
+const historyMove = {
+    "b": (new Array(6)).fill({}),
+    "w": (new Array(6)).fill({})
+};
+
+// Move ordering
 
 export function scoreMove(move) {
-    if (!move.captured) return 0;
+    // Killer heuristic and history heuristic
+
+    if (!move.captured) {
+        // 1st killer move
+        if (killerMove[0][ply] === move) return 9000;
+
+        // 2nd killer move
+        else if (killerMove[1][ply] === move) return 8000;
+
+        // History move
+        else return historyMove[move.color][PIECE_NUM[move.piece]][move.to] || 0;
+    }
+
+    // MVV-LVA heuristic
 
     const attacker = move.piece;
     const victim = move.captured;
@@ -38,14 +58,16 @@ export function negamax(depth, alpha, beta) {
 
     // Detecting checkmates and stalemates
     
-    if (possibleMoves.length === 0) {
+    if (possibleMoves.length === 0) {    
         if (chessObj.inCheck()) {
-            if (chessObj.turn() === side) { 
-                return -50000 + ply; // Checkmate, ply is added because we would want the furthest route to our checkmate
-            } else {
-                return 50000 - ply; // ply is subtracted because we would want the closest route to opponent's checkmate
-            }
-        } 
+            return -50000 + ply; // Checkmate
+
+            // Ply is added because:
+            // - In our checkmate, we would want the furthest path to checkmate
+            // - In their checkmate, we would want the shortest path to checkmate
+            
+            // The equation above also turns out to work well with negamax :v
+        }
 
         return 0; // Stalemate
     }
@@ -65,11 +87,23 @@ export function negamax(depth, alpha, beta) {
 
         // Fail-hard beta cutoff
 
-        if (score >= beta) return beta;
+        if (score >= beta) {
+            // store killer move
+
+            killerMove[1][ply] = killerMove[0][ply];
+            killerMove[0][ply] = childMove;
+
+            // move fails high
+            return beta;
+        }
 
         // Found better move
 
         if (score > alpha) {
+            // store history move
+
+            historyMove[childMove.color][PIECE_NUM[childMove.piece]][childMove.to] += depth;
+
             alpha = score;
 
             if (ply === 0) {

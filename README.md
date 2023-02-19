@@ -28,8 +28,12 @@ node .
 ### The engine
 
 * Negamax search algorithm with Alpha-Beta pruning.
-* MVV-LVA heuristic.
-* Simple evaluation over material and squares.
+* Move ordering:
+	* MVV-LVA heuristic.
+	* Killer heuristic.
+	* History heuristic.
+* Checkmate and stalemate detection.
+* A simple piece-square-table evaluation.
 
 ### Others
 
@@ -38,7 +42,7 @@ node .
 
 ## How strong is it?
 
-After some testing, it out-performs ~1000 elo chess bots on chess.com early game and mid-game, but does not know how to deliver a proper checkmate.
+After some testing, it completely out-performs ~1200 elo chess bots on chess.com early game and mid-game, but does not know how to deliver a proper checkmate.
 
 
 ## Copyrights
