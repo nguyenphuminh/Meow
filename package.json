@@ -1,0 +1,26 @@
+{
+  "name": "meow",
+  "version": "0.1.0",
+  "description": "A very simple chess engine",
+  "main": "./src/main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nguyenphuminh/meow.git"
+  },
+  "keywords": [
+    "chess"
+  ],
+  "author": "Meow",
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/nguyenphuminh/meow/issues"
+  },
+  "homepage": "https://github.com/nguyenphuminh/meow#readme",
+  "dependencies": {
+    "chess.js": "^1.0.0-beta.2"
+  },
+  "type": "module"
+}
