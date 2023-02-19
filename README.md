@@ -14,7 +14,7 @@ Meow...?
 
 2. Go to `./Meow/`, install the packages:
 ```
-	npm install
+npm install
 ```
 
 3. Fire up Meow!
