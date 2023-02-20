@@ -88,10 +88,12 @@ export function negamax(depth, alpha, beta) {
         // Fail-hard beta cutoff
 
         if (score >= beta) {
-            // store killer move
+            // Store killer move
 
-            killerMove[1][ply] = killerMove[0][ply];
-            killerMove[0][ply] = childMove;
+            if (!childMove.captured) { // Only quiet moves
+                killerMove[1][ply] = killerMove[0][ply];
+                killerMove[0][ply] = childMove;
+            }
 
             // move fails high
             return beta;
@@ -100,9 +102,11 @@ export function negamax(depth, alpha, beta) {
         // Found better move
 
         if (score > alpha) {
-            // store history move
+            // Store history move
 
-            historyMove[childMove.color][PIECE_NUM[childMove.piece]][childMove.to] += depth;
+            if (!childMove.captured) { // Only quiet moves
+                historyMove[childMove.color][PIECE_NUM[childMove.piece]][childMove.to] += depth;
+            }
 
             alpha = score;
 
