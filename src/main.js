@@ -3,7 +3,7 @@ import { Chess } from "chess.js";
 import { evaluateBoard } from "./evaluate.js";
 import { mvv_lva, PIECE, PIECE_NUM } from "./evaluations.js";
 
-let chessObj, bestMove, ply = 0, side;
+let chessObj, bestMove, prevMove = { lan: "" }, ply = 0, side, nodes = 0;
 
 const killerMove = (new Array(2)).fill(new Array(64).fill(null));
 
@@ -12,6 +12,8 @@ const historyMove = {
     "w": (new Array(6)).fill({})
 };
 
+const counterMove = {}; // counterMove[prevMoveAsLAN] = move;
+
 // Move ordering
 
 export function scoreMove(move) {
@@ -19,13 +21,24 @@ export function scoreMove(move) {
 
     if (!move.captured) {
         // 1st killer move
-        if (killerMove[0][ply] === move) return 9000;
+        if (killerMove[0][ply] && killerMove[0][ply].lan === move.lan) { 
+            move.score += 9000; 
+        }
 
         // 2nd killer move
-        else if (killerMove[1][ply] === move) return 8000;
+        else if (killerMove[1][ply] && killerMove[1][ply].lan === move.lan) {
+            move.score += 8000;
+        }
+
+        // Counter move
+        if (counterMove[prevMove.lan] && counterMove[prevMove.lan].lan === move.lan) {
+            move.score += 9000;
+        }
 
         // History move
-        else return historyMove[move.color][PIECE_NUM[move.piece]][move.to] || 0;
+        move.score += historyMove[move.color][PIECE_NUM[move.piece]][move.to] || 0;
+        
+        return;
     }
 
     // MVV-LVA heuristic
@@ -33,12 +46,14 @@ export function scoreMove(move) {
     const attacker = move.piece;
     const victim = move.captured;
 
-    return mvv_lva[ PIECE_NUM[attacker] ][ PIECE_NUM[victim] ];
+    move.score += mvv_lva[ PIECE_NUM[attacker] ][ PIECE_NUM[victim] ];
 }
 
 export function sortMoves(moveList) {
     for (const move of moveList) {
-        move.score = scoreMove(move);
+        move.score = 0;
+
+        scoreMove(move);
     }
 
     return moveList.sort((moveA, moveB) => moveB.score - moveA.score);
@@ -48,6 +63,8 @@ export function sortMoves(moveList) {
 // Negamax search with a-b pruning
 
 export function negamax(depth, alpha, beta) {
+    // nodes++; Debugging purposes
+
     if (depth === 0) return evaluateBoard(chessObj, side);
 
     let oldAlpha = alpha, bestSoFar;
@@ -75,6 +92,9 @@ export function negamax(depth, alpha, beta) {
     // Evaluate child moves
 
     for (const childMove of possibleMoves) {
+        const tempPrevMove = prevMove; // Preserve prev move of this depth
+        prevMove = childMove; // Assign new prev move
+
         chessObj.move(childMove);
 
         ply++;
@@ -83,16 +103,21 @@ export function negamax(depth, alpha, beta) {
 
         ply--;
 
-        chessObj.undo(); // Take back
+        chessObj.undo(); // Take back move
+
+        prevMove = tempPrevMove; // Get prev move of this depth
 
         // Fail-hard beta cutoff
 
         if (score >= beta) {
-            // Store killer move
-
             if (!childMove.captured) { // Only quiet moves
+                // Store killer moves
+                
                 killerMove[1][ply] = killerMove[0][ply];
                 killerMove[0][ply] = childMove;
+
+                // Store counter moves
+                counterMove[prevMove.lan] = childMove;
             }
 
             // move fails high
@@ -102,7 +127,7 @@ export function negamax(depth, alpha, beta) {
         // Found better move
 
         if (score > alpha) {
-            // Store history move
+            // Store history moves
 
             if (!childMove.captured) { // Only quiet moves
                 historyMove[childMove.color][PIECE_NUM[childMove.piece]][childMove.to] += depth;
@@ -129,6 +154,9 @@ export function negamax(depth, alpha, beta) {
 export function search(depth = 4) {
     negamax(depth, -50000, 50000);
 
+    // For debugging purposes
+    // console.log(nodes);
+
     return bestMove;
 }
 
@@ -138,6 +166,7 @@ const io = readline.createInterface({
     output: process.stdout
 });
 
+
 io.question("Enter FEN value: ", fen => {
     chessObj = new Chess(fen);
 
@@ -145,7 +174,19 @@ io.question("Enter FEN value: ", fen => {
 
     console.log(chessObj.ascii());
 
-    console.log(search(4));
+    console.log(search(4)); // Can do depth 5
 
-    io.close();
+    // Taking next moves from loaded FEN
+
+    (function play() {
+        io.question("Enter opponent's move (as LAN): ", move => {
+            chessObj.move(move);
+
+            console.log(chessObj.ascii());
+
+            console.log(search(4));
+            
+            play();
+        });
+    })();
 });

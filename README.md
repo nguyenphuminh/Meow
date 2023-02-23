@@ -32,6 +32,7 @@ node .
 	* MVV-LVA heuristic.
 	* Killer heuristic.
 	* History heuristic.
+	* Countermove heuristic.
 * Checkmate and stalemate detection.
 * A simple piece-square-table evaluation.
 
