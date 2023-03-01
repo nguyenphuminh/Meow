@@ -175,18 +175,4 @@ io.question("Enter FEN value: ", fen => {
     console.log(chessObj.ascii());
 
     console.log(search(4)); // Can do depth 5
-
-    // Taking next moves from loaded FEN
-
-    (function play() {
-        io.question("Enter next FEN value: ", fen => {
-            chessObj = new Chess(fen);
-
-            console.log(chessObj.ascii());
-
-            console.log(search(4)); // Can do depth 5
-            
-            play();
-        });
-    })();
 });
