@@ -5,11 +5,11 @@ import { mvv_lva, PIECE, PIECE_NUM } from "./evaluations.js";
 
 let chessObj, bestMove, prevMove = { lan: "" }, ply = 0, side, nodes = 0;
 
-const killerMove = (new Array(2)).fill(new Array(64).fill(null));
+const killerMove = [ new Array(64).fill(null), new Array(64).fill(null) ];
 
 const historyMove = {
-    "b": (new Array(6)).fill({}),
-    "w": (new Array(6)).fill({})
+    "b": [ {}, {}, {}, {}, {}, {} ],
+    "w": [ {}, {}, {}, {}, {}, {} ]
 };
 
 const counterMove = {}; // counterMove[prevMoveAsLAN] = move;
@@ -63,7 +63,7 @@ export function sortMoves(moveList) {
 // Negamax search with a-b pruning
 
 export function negamax(depth, alpha, beta) {
-    // nodes++; Debugging purposes
+    nodes++; // Debugging purposes
 
     if (depth === 0) return evaluateBoard(chessObj, side);
 
@@ -175,4 +175,6 @@ io.question("Enter FEN value: ", fen => {
     console.log(chessObj.ascii());
 
     console.log(search(4)); // Can do depth 5
+
+    io.close();
 });
