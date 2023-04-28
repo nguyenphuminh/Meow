@@ -1,9 +1,22 @@
+import fs from "fs";
 import readline from "readline";
 import { Chess } from "chess.js";
 import { evaluateBoard } from "./evaluate.js";
 import { mvv_lva, PIECE, PIECE_NUM } from "./evaluations.js";
+import { genZobristKey } from "./zobrist.js";
+import { transpositionTable } from "./transpositions.js";
 
-let chessObj, bestMove, prevMove = { lan: "" }, ply = 0, side, nodes = 0;
+let chessObj, 
+    bestMove, 
+    prevMove = { san: "" }, 
+    ply = 0, 
+    side, 
+    nodes = 0, 
+    debug = false, 
+    train = false,
+    bestScore = 0;
+
+const cache = transpositionTable; // Used for transposition table generation
 
 const killerMove = [ new Array(64).fill(null), new Array(64).fill(null) ];
 
@@ -12,7 +25,7 @@ const historyMove = {
     "w": [ {}, {}, {}, {}, {}, {} ]
 };
 
-const counterMove = {}; // counterMove[prevMoveAsLAN] = move;
+const counterMove = {}; // counterMove[prevMoveAsSAN] = move;
 
 // Move ordering
 
@@ -21,17 +34,17 @@ export function scoreMove(move) {
 
     if (!move.captured) {
         // 1st killer move
-        if (killerMove[0][ply] && killerMove[0][ply].lan === move.lan) { 
+        if (killerMove[0][ply] && killerMove[0][ply].san === move.san) { 
             move.score += 9000; 
         }
 
         // 2nd killer move
-        else if (killerMove[1][ply] && killerMove[1][ply].lan === move.lan) {
+        else if (killerMove[1][ply] && killerMove[1][ply].san === move.san) {
             move.score += 8000;
         }
 
         // Counter move
-        if (counterMove[prevMove.lan] && counterMove[prevMove.lan].lan === move.lan) {
+        if (counterMove[prevMove.san] && counterMove[prevMove.san].san === move.san) {
             move.score += 9000;
         }
 
@@ -69,7 +82,49 @@ export function negamax(depth, alpha, beta) {
 
     let oldAlpha = alpha, bestSoFar;
 
-    // Get next moves
+    // Check transpositions
+
+    const hash = genZobristKey(chessObj);
+    const move = cache[hash];
+
+    if (move) {
+        const score = move.eval;
+
+        // Fail-hard beta cutoff
+
+        if (score >= beta) {
+            if (!move.captured) { // Only quiet moves
+                // Store killer moves
+                
+                killerMove[1][ply] = killerMove[0][ply];
+                killerMove[0][ply] = move;
+
+                // Store counter moves
+                counterMove[prevMove.san] = move;
+            }
+
+            // move fails high
+            return beta;
+        }
+
+        if (!move.captured) { // Only quiet moves
+            historyMove[move.color][PIECE_NUM[move.piece]][move.to] += depth;
+        }
+
+        alpha = score;
+
+        if (ply === 0) {
+            bestSoFar = move;
+        }
+
+        if (oldAlpha !== alpha) {
+            bestMove = bestSoFar;
+        }
+    
+        return alpha;
+    }
+
+    // Get next moves if position does not have an existing best move
 
     const possibleMoves = sortMoves(chessObj.moves({ verbose: true }));
 
@@ -117,7 +172,7 @@ export function negamax(depth, alpha, beta) {
                 killerMove[0][ply] = childMove;
 
                 // Store counter moves
-                counterMove[prevMove.lan] = childMove;
+                counterMove[prevMove.san] = childMove;
             }
 
             // move fails high
@@ -152,10 +207,13 @@ export function negamax(depth, alpha, beta) {
 
 
 export function search(depth = 4) {
-    negamax(depth, -50000, 50000);
+    bestScore = negamax(depth, -50000, 50000);
 
     // For debugging purposes
-    // console.log(nodes);
+    if (debug) { 
+        console.log("Nodes searched:", nodes);
+        console.log("Evaluation:", bestScore);
+    }
 
     return bestMove;
 }
@@ -168,13 +226,28 @@ const io = readline.createInterface({
 
 
 io.question("Enter FEN value: ", fen => {
+    // Uncomment to enable debugging mode
+    // debug = true;
+    // Uncomment to enable training mode (generate moves for transposition table)
+    // train = true;
+
     chessObj = new Chess(fen);
 
     side = chessObj.turn();
 
     console.log(chessObj.ascii());
 
-    console.log(search(4)); // Can do depth 5
+    const bestMove = search(4);
 
+    console.log(bestMove);
+
+    if (debug && train) {
+        bestMove.eval = bestScore;
+
+        cache[genZobristKey(chessObj)] = bestMove;
+
+        fs.writeFileSync("./src/transpositions.js", "export const transpositionTable = " + JSON.stringify(cache));
+    }
+    
     io.close();
 });
