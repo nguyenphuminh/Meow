@@ -33,8 +33,10 @@ node .
 	* Killer heuristic.
 	* History heuristic.
 	* Countermove heuristic.
+* Transposition table.
 * Checkmate and stalemate detection.
-* A simple piece-square-table evaluation.
+* Evalution:
+	* Piece-Square table.
 
 ### Others
 
