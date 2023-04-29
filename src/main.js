@@ -15,27 +15,39 @@ let chessObj,
     train = false,
     bestScore = 0;
 
-const cache = transpositionTable; // Used for transposition table generation
+const cache = transpositionTable /*{}*/; // Used for transposition table generation
+
+// Principal variation
 
 const pvLength = new Array(64).fill(0);
 const pvTable = new Array(64).fill([]).map(() => new Array(64).fill(""));
 
 let followPV = 0, scorePV = 0;
 
+// Killer move constants
+
 const killerMove = [ new Array(64).fill(null), new Array(64).fill(null) ];
+
+// History move constants
 
 const historyMove = {
     "b": [ {}, {}, {}, {}, {}, {} ],
     "w": [ {}, {}, {}, {}, {}, {} ]
 };
 
+// Countermove constants
+
 const counterMove = {}; // counterMove[prevMoveAsSAN] = move;
+
+// LMR constants
+
+const fullDepth = 4;
+const maxReduction = 3;
 
 // Move ordering
 
 export function scoreMove(move) {
     // Killer heuristic and history heuristic
-
     
     if (scorePV) {
         if (pvTable[0][ply].lan == move.lan) { // Only pv move
@@ -107,7 +119,7 @@ export function enablePVScoring(moveList) {
 export function negamax(depth, alpha, beta) {
     nodes++; // Debugging purposes
 
-    let foundPV = 0, score = 0;
+    let foundPV = 0, score = 0, searchedMoves = 0;
 
     // Init PV length
     pvLength[ply] = ply;
@@ -205,12 +217,38 @@ export function negamax(depth, alpha, beta) {
                 score = -negamax(depth-1, -beta, -alpha);
             }
         } else {
-            score = -negamax(depth-1, -beta, -alpha);
+            if (searchedMoves === 0) {
+                score = -negamax(depth-1, -beta, -alpha);
+            } else {
+                if (
+                    searchedMoves >= fullDepth && 
+                    depth >= maxReduction && 
+                    !chessObj.inCheck() &&
+                    !childMove.captured &&
+                    !childMove.promotion
+                ) {
+                    score = -negamax(depth-2, -alpha - 1, -alpha);
+                } else {
+                    score = alpha + 1; // Magic 
+                }
+
+                // If better move is found during LMR, research at normal depth with narrowed score bandwidth
+                if (score > alpha) {
+                    score = -negamax(depth-1, -alpha - 1, -alpha);
+
+                    // If LMR fails, research at full depth and full score bandwidth
+                    if (score > alpha && score < beta) {
+                        score = -negamax(depth-1, -beta, -alpha);
+                    }
+                }
+            }
         }
 
         ply--;
 
         chessObj.undo(); // Take back move
+
+        searchedMoves++;
 
         prevMove = tempPrevMove; // Get prev move of this depth
 
@@ -299,7 +337,7 @@ const io = readline.createInterface({
 
 io.question("Enter FEN value: ", fen => {
     // Uncomment to enable debugging mode
-    debug = true;
+    // debug = true;
     // Uncomment to enable training mode (generate moves for transposition table)
     // train = true;
 
@@ -309,7 +347,7 @@ io.question("Enter FEN value: ", fen => {
 
     console.log(chessObj.ascii());
 
-    const bestMove = search(4);
+    const bestMove = search(4); // Can do depth 6 but pretty slow
 
     console.log(bestMove);
 
