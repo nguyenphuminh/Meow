@@ -7,7 +7,6 @@ import { genZobristKey } from "./zobrist.js";
 import { transpositionTable } from "./transpositions.js";
 
 let chessObj, 
-    bestMove, 
     prevMove = { san: "" }, 
     ply = 0, 
     side, 
@@ -16,7 +15,12 @@ let chessObj,
     train = false,
     bestScore = 0;
 
-const cache = transpositionTable /* {} */; // Used for transposition table generation
+const cache = transpositionTable; // Used for transposition table generation
+
+const pvLength = new Array(64).fill(0);
+const pvTable = new Array(64).fill([]).map(() => new Array(64).fill(""));
+
+let followPV = 0, scorePV = 0;
 
 const killerMove = [ new Array(64).fill(null), new Array(64).fill(null) ];
 
@@ -32,19 +36,30 @@ const counterMove = {}; // counterMove[prevMoveAsSAN] = move;
 export function scoreMove(move) {
     // Killer heuristic and history heuristic
 
+    
+    if (scorePV) {
+        if (pvTable[0][ply].lan == move.lan) { // Only pv move
+            // Disable pv move scoring
+
+            scorePV = 0;
+            
+            move.score += 20000;
+        }
+    }
+
     if (!move.captured) {
         // 1st killer move
-        if (killerMove[0][ply] && killerMove[0][ply].san === move.san) { 
+        if (killerMove[0][ply] && killerMove[0][ply].lan === move.lan) { 
             move.score += 9000; 
         }
 
         // 2nd killer move
-        else if (killerMove[1][ply] && killerMove[1][ply].san === move.san) {
+        else if (killerMove[1][ply] && killerMove[1][ply].lan === move.lan) {
             move.score += 8000;
         }
 
         // Counter move
-        if (counterMove[prevMove.san] && counterMove[prevMove.san].san === move.san) {
+        if (counterMove[prevMove.lan] && counterMove[prevMove.lan].lan === move.lan) {
             move.score += 9000;
         }
 
@@ -72,15 +87,32 @@ export function sortMoves(moveList) {
     return moveList.sort((moveA, moveB) => moveB.score - moveA.score);
 }
 
+export function enablePVScoring(moveList) {
+    followPV = 0; // Disable pv move following
+
+    for (const move of moveList) {
+        if (pvTable[0][ply].lan == move.lan) {
+            // Enable PV move scoring
+            scorePV = 1;
+
+            // Enable next PV move following
+            followPV = 1;
+        }
+    }
+}
+
 
 // Negamax search with a-b pruning
 
 export function negamax(depth, alpha, beta) {
     nodes++; // Debugging purposes
 
-    if (depth === 0) return evaluateBoard(chessObj, side);
+    let foundPV = 0, score = 0;
 
-    let oldAlpha = alpha, bestSoFar;
+    // Init PV length
+    pvLength[ply] = ply;
+
+    if (depth === 0) return evaluateBoard(chessObj, side);
 
     // Check transpositions
 
@@ -100,7 +132,7 @@ export function negamax(depth, alpha, beta) {
                 killerMove[0][ply] = move;
 
                 // Store counter moves
-                counterMove[prevMove.san] = move;
+                counterMove[prevMove.lan] = move;
             }
 
             // move fails high
@@ -111,22 +143,34 @@ export function negamax(depth, alpha, beta) {
             historyMove[move.color][PIECE_NUM[move.piece]][move.to] += depth;
         }
 
+        // PV move
         alpha = score;
 
-        if (ply === 0) {
-            bestSoFar = move;
+        // Enable found PV flag
+        foundPV = 1;
+
+        // Write PV move
+        pvTable[ply][ply] = move;
+
+        // Next ply
+        for (let nextPly = ply + 1; nextPly < pvLength[ply + 1]; nextPly++) {
+            pvTable[ply][nextPly] = pvTable[ply + 1][nextPly];
         }
 
-        if (oldAlpha !== alpha) {
-            bestMove = bestSoFar;
-        }
+        pvLength[ply] = pvLength[ply + 1];
     
         return alpha;
     }
 
     // Get next moves if position does not have an existing best move
 
-    const possibleMoves = sortMoves(chessObj.moves({ verbose: true }));
+    let possibleMoves = chessObj.moves({ verbose: true });
+
+    if (followPV) {
+        enablePVScoring(possibleMoves);
+    }
+
+    possibleMoves = sortMoves(possibleMoves);
 
     // Detecting checkmates and stalemates
     
@@ -154,7 +198,15 @@ export function negamax(depth, alpha, beta) {
 
         ply++;
 
-        const score = -negamax(depth-1, -beta, -alpha);
+        if (foundPV) {
+            score = -negamax(depth - 1, -alpha - 1, -alpha);
+
+            if ((score > alpha) && (score < beta)) {
+                score = -negamax(depth-1, -beta, -alpha);
+            }
+        } else {
+            score = -negamax(depth-1, -beta, -alpha);
+        }
 
         ply--;
 
@@ -172,7 +224,7 @@ export function negamax(depth, alpha, beta) {
                 killerMove[0][ply] = childMove;
 
                 // Store counter moves
-                counterMove[prevMove.san] = childMove;
+                counterMove[prevMove.lan] = childMove;
             }
 
             // move fails high
@@ -188,18 +240,24 @@ export function negamax(depth, alpha, beta) {
                 historyMove[childMove.color][PIECE_NUM[childMove.piece]][childMove.to] += depth;
             }
 
+            // PV move
             alpha = score;
 
-            if (ply === 0) {
-                bestSoFar = childMove;
+            // Enable found PV flag
+
+            foundPV = 1;
+
+            // Write PV move
+            pvTable[ply][ply] = childMove;
+
+            // Next ply
+
+            for (let nextPly = ply + 1; nextPly < pvLength[ply + 1]; nextPly++) {
+                pvTable[ply][nextPly] = pvTable[ply + 1][nextPly];
             }
+
+            pvLength[ply] = pvLength[ply + 1];
         }
-    }
-
-    // Best move
-
-    if (oldAlpha !== alpha) {
-        bestMove = bestSoFar;
     }
 
     return alpha;
@@ -207,15 +265,29 @@ export function negamax(depth, alpha, beta) {
 
 
 export function search(depth = 4) {
-    bestScore = negamax(depth, -50000, 50000);
+    // Iterative deepening
 
-    // For debugging purposes
-    if (debug) { 
-        console.log("Nodes searched:", nodes);
-        console.log("Evaluation:", bestScore);
+    for (let currentDepth = 1; currentDepth <= depth; currentDepth++) {
+        followPV = 1; // Enable follow PV flag
+
+        nodes = 0;
+
+        bestScore = negamax(currentDepth, -50000, 50000);
+
+        // For debugging purposes
+        if (debug) { 
+            process.stdout.write("PV moves: ");
+
+            for (let count = 0; count < pvLength[0]; count++) {
+                process.stdout.write(pvTable[0][count].lan + " ");
+            }
+
+            console.log("\nNodes searched:", nodes);
+            console.log("Evaluation:", bestScore);
+        }
     }
 
-    return bestMove;
+    return pvTable[0][0];
 }
 
 
@@ -227,7 +299,7 @@ const io = readline.createInterface({
 
 io.question("Enter FEN value: ", fen => {
     // Uncomment to enable debugging mode
-    // debug = true;
+    debug = true;
     // Uncomment to enable training mode (generate moves for transposition table)
     // train = true;
 
