@@ -16,7 +16,7 @@ let chessObj,
     train = false,
     bestScore = 0;
 
-const cache = transpositionTable; // Used for transposition table generation
+const cache = transpositionTable /* {} */; // Used for transposition table generation
 
 const killerMove = [ new Array(64).fill(null), new Array(64).fill(null) ];
 
@@ -87,7 +87,7 @@ export function negamax(depth, alpha, beta) {
     const hash = genZobristKey(chessObj);
     const move = cache[hash];
 
-    if (move) {
+    if (move && !train) {
         const score = move.eval;
 
         // Fail-hard beta cutoff
