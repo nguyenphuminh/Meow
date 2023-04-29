@@ -28,7 +28,10 @@ node .
 ### The engine
 
 * Negamax search algorithm with Alpha-Beta pruning.
+* Iterative deepening.
+* Principal variation search.
 * Move ordering:
+	* PV moves.
 	* MVV-LVA heuristic.
 	* Killer heuristic.
 	* History heuristic.
