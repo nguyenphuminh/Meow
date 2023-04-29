@@ -37,6 +37,7 @@ node .
 	* History heuristic.
 	* Countermove heuristic.
 * Transposition table.
+* Late move reduction.
 * Checkmate and stalemate detection.
 * Evalution:
 	* Piece-Square table.
