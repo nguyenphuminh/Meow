@@ -30,6 +30,7 @@ node .
 * Negamax search algorithm with Alpha-Beta pruning.
 * Iterative deepening.
 * Principal variation search.
+* Null-move pruning.
 * Move ordering:
 	* PV moves.
 	* MVV-LVA heuristic.
@@ -39,6 +40,8 @@ node .
 * Transposition table.
 * Late move reduction.
 * Checkmate and stalemate detection.
+* Quiescence search (disabled).
+* Aspiration window (disabled).
 * Evalution:
 	* Piece-Square table.
 
