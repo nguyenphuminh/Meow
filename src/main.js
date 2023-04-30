@@ -2,7 +2,7 @@ import fs from "fs";
 import readline from "readline";
 import { Chess } from "chess.js";
 import { evaluateBoard } from "./evaluate.js";
-import { mvv_lva, PIECE, PIECE_NUM } from "./evaluations.js";
+import { mvv_lva, PIECE_NUM } from "./evaluations.js";
 import { genZobristKey } from "./zobrist.js";
 import { transpositionTable } from "./transpositions.js";
 
@@ -16,7 +16,7 @@ let chessObj,
     bestScore = 0,
     globalFen = "";
 
-const cache = transpositionTable /*{}*/; // Used for transposition table generation
+const cache = /*transpositionTable*/ {}; // Used for transposition table generation
 
 // Principal variation
 
@@ -421,7 +421,7 @@ const io = readline.createInterface({
 
 io.question("Enter FEN value: ", fen => {
     // Uncomment to enable debugging mode
-    // debug = true;
+    debug = true;
     // Uncomment to enable training mode (generate moves for transposition table)
     // train = true;
 
