@@ -16,7 +16,7 @@ let chessObj,
     bestScore = 0,
     globalFen = "";
 
-const cache = /*transpositionTable*/ {}; // Used for transposition table generation
+const cache = transpositionTable /*{}*/; // Used for transposition table generation
 
 // Principal variation
 
