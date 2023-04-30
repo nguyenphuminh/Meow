@@ -13,7 +13,8 @@ let chessObj,
     nodes = 0, 
     debug = false, 
     train = false,
-    bestScore = 0;
+    bestScore = 0,
+    globalFen = "";
 
 const cache = transpositionTable /*{}*/; // Used for transposition table generation
 
@@ -113,13 +114,65 @@ export function enablePVScoring(moveList) {
     }
 }
 
+/* Spawns an absurdly high amount of nodes and I don't really know why :/
+// Quiescence search
+
+export function quiescence(alpha, beta) {
+    // increment nodes count
+    nodes++;
+
+    const evaluation = evaluateBoard(chessObj, side);
+
+    // fail-hard beta cutoff
+    if (evaluation >= beta) {
+        // node (move) fails high
+        return beta;
+    }
+
+    // found a better move
+    if (evaluation > alpha) {
+        // PV node (move)
+        alpha = evaluation;
+    }
+
+    let possibleMoves = chessObj.moves({ verbose: true }).filter(move => move.captured);
+
+    possibleMoves = sortMoves(possibleMoves);
+
+    for (const childMove of possibleMoves) {
+        chessObj.move(childMove);
+
+        ply++;
+
+        const score = -quiescence(-beta, -alpha);
+
+        ply--;
+
+        chessObj.undo(); // Take back move
+
+        // fail-hard beta cutoff
+        if (score >= beta) {
+            // node (move) fails high
+            return beta;
+        }
+        
+        // found a better move
+        if (score > alpha) {
+            // PV node (move)
+            alpha = score; 
+        }
+    }
+
+    return alpha;
+}*/
+
 
 // Negamax search with a-b pruning
 
 export function negamax(depth, alpha, beta) {
     nodes++; // Debugging purposes
 
-    let foundPV = 0, score = 0, searchedMoves = 0;
+    let score = 0, searchedMoves = 0;
 
     // Init PV length
     pvLength[ply] = ply;
@@ -158,9 +211,6 @@ export function negamax(depth, alpha, beta) {
         // PV move
         alpha = score;
 
-        // Enable found PV flag
-        foundPV = 1;
-
         // Write PV move
         pvTable[ply][ply] = move;
 
@@ -172,6 +222,33 @@ export function negamax(depth, alpha, beta) {
         pvLength[ply] = pvLength[ply + 1];
     
         return alpha;
+    }
+
+    // Null move pruning (idk if it even works or not lol)
+    
+    if (depth >= 3 && !chessObj.inCheck() && ply) {
+        // Preserve old moves to reconstruct chess obj
+        const oldMoves = chessObj.history();
+
+        // Make null move
+        let tokens = chessObj.fen().split(" ");
+        tokens[1] = chessObj.turn() === "w" ? "b" : "w";
+        tokens[3] = '-' // reset the en passant square
+        chessObj.load(tokens.join(" "));
+
+        // Search with reduced depth
+        const score = -negamax(depth - 1 - 2, -beta, -beta + 1);
+
+        // Reconstruct chess obj prior to null move
+        chessObj.load(globalFen);
+        for (const oldMove of oldMoves) {
+            chessObj.move(oldMove);
+        }
+
+        // Fail-hard beta cutoff
+        if (score >= beta) {
+            return beta;
+        }
     }
 
     // Get next moves if position does not have an existing best move
@@ -200,7 +277,7 @@ export function negamax(depth, alpha, beta) {
         return 0; // Stalemate
     }
 
-    // Evaluate child moves
+    // Evaluate moves
 
     for (const childMove of possibleMoves) {
         const tempPrevMove = prevMove; // Preserve prev move of this depth
@@ -210,36 +287,31 @@ export function negamax(depth, alpha, beta) {
 
         ply++;
 
-        if (foundPV) {
-            score = -negamax(depth - 1, -alpha - 1, -alpha);
+        // Late move reduction
 
-            if ((score > alpha) && (score < beta)) {
-                score = -negamax(depth-1, -beta, -alpha);
-            }
+        if (searchedMoves === 0) {
+            score = -negamax(depth-1, -beta, -alpha);
         } else {
-            if (searchedMoves === 0) {
-                score = -negamax(depth-1, -beta, -alpha);
+            if (
+                searchedMoves >= fullDepth && 
+                depth >= maxReduction && 
+                !chessObj.inCheck() &&
+                !childMove.captured &&
+                !childMove.promotion
+            ) {
+                score = -negamax(depth-2, -alpha - 1, -alpha);
             } else {
-                if (
-                    searchedMoves >= fullDepth && 
-                    depth >= maxReduction && 
-                    !chessObj.inCheck() &&
-                    !childMove.captured &&
-                    !childMove.promotion
-                ) {
-                    score = -negamax(depth-2, -alpha - 1, -alpha);
-                } else {
-                    score = alpha + 1; // Magic 
-                }
+                score = alpha + 1; // Magic 
+            }
 
-                // If better move is found during LMR, research at normal depth with narrowed score bandwidth
-                if (score > alpha) {
-                    score = -negamax(depth-1, -alpha - 1, -alpha);
+            // PVS
+            if (score > alpha) {
+                // Found better move in LMR, research at full depth with reduced score bandwidth
+                score = -negamax(depth-1, -alpha - 1, -alpha);
 
-                    // If LMR fails, research at full depth and full score bandwidth
-                    if (score > alpha && score < beta) {
-                        score = -negamax(depth-1, -beta, -alpha);
-                    }
+                // If LMR fails, research at full depth and full score bandwidth
+                if (score < beta) {
+                    score = -negamax(depth-1, -beta, -alpha);
                 }
             }
         }
@@ -273,7 +345,6 @@ export function negamax(depth, alpha, beta) {
 
         if (score > alpha) {
             // Store history moves
-
             if (!childMove.captured) { // Only quiet moves
                 historyMove[childMove.color][PIECE_NUM[childMove.piece]][childMove.to] += depth;
             }
@@ -281,15 +352,10 @@ export function negamax(depth, alpha, beta) {
             // PV move
             alpha = score;
 
-            // Enable found PV flag
-
-            foundPV = 1;
-
             // Write PV move
             pvTable[ply][ply] = childMove;
 
             // Next ply
-
             for (let nextPly = ply + 1; nextPly < pvLength[ply + 1]; nextPly++) {
                 pvTable[ply][nextPly] = pvTable[ply + 1][nextPly];
             }
@@ -303,6 +369,8 @@ export function negamax(depth, alpha, beta) {
 
 
 export function search(depth = 4) {
+    let alpha = -50000, beta = 50000;
+
     // Iterative deepening
 
     for (let currentDepth = 1; currentDepth <= depth; currentDepth++) {
@@ -310,7 +378,23 @@ export function search(depth = 4) {
 
         nodes = 0;
 
-        bestScore = negamax(currentDepth, -50000, 50000);
+        bestScore = negamax(currentDepth, alpha, beta);
+
+        // Aspiration window but kind of sucks
+        /*
+        // We fell outside the window, try again with a full-width window and the same depth
+
+        if (bestScore <= alpha || bestScore >= beta) {
+            alpha = -50000;
+            beta = 50000;
+            continue;
+        }
+
+        // set up window for next iteration
+
+        alpha = bestScore - 50;
+        beta = bestScore + 50;
+        */
 
         // For debugging purposes
         if (debug) { 
@@ -341,13 +425,15 @@ io.question("Enter FEN value: ", fen => {
     // Uncomment to enable training mode (generate moves for transposition table)
     // train = true;
 
+    globalFen = fen;
+
     chessObj = new Chess(fen);
 
     side = chessObj.turn();
 
     console.log(chessObj.ascii());
 
-    const bestMove = search(4); // Can do depth 6 but pretty slow
+    const bestMove = search(4); // Can do depth 6 but pretty slow, depth 5 is fine
 
     console.log(bestMove);
 
